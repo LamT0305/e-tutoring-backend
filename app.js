@@ -8,11 +8,14 @@ import dotenv from 'dotenv'; // Changed to import
 dotenv.config(); // To use environment variables from .env
 
 const app = express();
+app.use(bodyParser.json());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 const PORT = process.env.PORT || 3000; 
 
 /* ------------------------ cors ------------------------ */
 app.use(cors());
-app.use(bodyParser.json());
 
 /* ------------------------ use route ------------------------ */
 routers(app);

@@ -1,9 +1,13 @@
 // models/Tutor.js
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
 const tutorSchema = new mongoose.Schema({
-  tutor_id: { type: Number, unique: true, required: true },
-  user_id: { type: Number, required: true, ref: 'User' }
+  user_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: "User",
+  },
 });
 
-module.exports = mongoose.model('Tutor', tutorSchema);
+const Tutor = mongoose.model("Tutor", tutorSchema);
+export default Tutor;
