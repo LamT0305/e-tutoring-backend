@@ -14,7 +14,7 @@ export const getAllStudents = async (req, res, next) => {
             model: "Role",
           },
         })
-        .populate("tutor_id");
+        .populate("tutor_ids");
       res.status(200).json({
         message: "success",
         students: students,

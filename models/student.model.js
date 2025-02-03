@@ -6,10 +6,10 @@ const studentSchema = new mongoose.Schema({
     required: true,
     ref: "User", 
   },
-  tutor_id: {
+  tutor_ids: [{
     type: mongoose.Schema.Types.ObjectId,
-    default: null,
-  },
+    ref: "Tutor",
+  }],
   created_at: {
     type: Date,
     default: Date.now,

@@ -1,12 +1,6 @@
 import User from "../models/user.model.js";
-import Role from "../models/role.model.js";
-import Student from "../models/student.model.js";
-import Tutor from "../models/tutor.model.js";
 import bcrypt from "bcrypt";
 import jsonwebtoken from "jsonwebtoken";
-
-
-
 
 // authentication
 export const login = async (req, res) => {
@@ -27,7 +21,7 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials!" });
     }
     const token = jsonwebtoken.sign(
-      { id: user.id, name: user.name, role_id: user.role_id },
+      { id: user._id, name: user.name, role_id: user.role_id },
       process.env.JWR_SECRET,
       {
         expiresIn: "1h",
