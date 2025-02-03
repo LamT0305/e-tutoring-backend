@@ -21,7 +21,7 @@ export const getMessagesByReceiver = async (req, res) => {
   }
 };
 // authorized
-export const sentMessage = async (req, res) => {
+export const sendMessage = async (req, res) => {
   try {
     const user_id = req.user.id;
     const { receiver_id, content } = req.body;
