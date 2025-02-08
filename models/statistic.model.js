@@ -1,22 +1,27 @@
 // models/Statistic.js
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const statisticSchema = new mongoose.Schema({
-  tutor_id: {
+  sender_id: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    ref: "Tutor",
+    ref: "User",
   },
-  student_id: {
+  receiver_id: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    ref: "Student",
+    ref: "User",
   },
   interaction: { type: String, required: true },
-  type: {
-    type: Number,
+  content: {
+    type: String,
     required: true,
   },
-});
+},
+{
+  timestamps: true,
+}
+);
 
-module.exports = mongoose.model("Statistic", statisticSchema);
+const Statistic = mongoose.model("Statistic", statisticSchema);
+export default Statistic;

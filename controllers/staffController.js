@@ -72,8 +72,10 @@ export const allocateTutors = async (req, res) => {
   const { tutorId, studentIds } = req.body;
 
   try {
-    if(req.user.role_name != "Staff"){
-      return res.status(403).json({ message: " Access denied, only staff can allocate tutor" });
+    if (req.user.role_name != "Staff") {
+      return res
+        .status(403)
+        .json({ message: " Access denied, only staff can allocate tutor" });
     }
     const tutor = await Tutor.findById(tutorId);
     if (!tutor) {
@@ -129,9 +131,18 @@ export const allocateTutors = async (req, res) => {
 
 export const viewAllocations = async (req, res) => {
   try {
-    console.log(req.user.role_name)
-    if(req.user.role_name == "Student"){
-      return res.status(403).json({ message: "Access denied, student can not access the allocation list" });
+    if (req.user.role_name != "Staff") {
+      return res
+        .status(403)
+        .json({ message: " Access denied, only staff can view allocation list" });
+    }
+    console.log(req.user.role_name);
+    if (req.user.role_name == "Student") {
+      return res
+        .status(403)
+        .json({
+          message: "Access denied, student can not access the allocation list",
+        });
     }
     const allocations = await Allocation.find();
     res.status(200).json({ message: "success", allocations: allocations });
@@ -142,10 +153,12 @@ export const viewAllocations = async (req, res) => {
 
 export const deleteAllocation = async (req, res) => {
   try {
-    console.log(req.user.role_name)
+    console.log(req.user.role_name);
 
-    if(req.user.role_name != "Staff"){
-      return res.status(403).json({ message: " Access denied, only staff can delete allocation" });
+    if (req.user.role_name != "Staff") {
+      return res
+        .status(403)
+        .json({ message: " Access denied, only staff can delete allocation" });
     }
     const allocation = await Allocation.findById(req.params.id);
     if (!allocation) {

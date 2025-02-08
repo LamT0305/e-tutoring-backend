@@ -1,6 +1,8 @@
 // CRUD turtor
 import Allocation from "../models/allocation.model.js";
+import Message from "../models/message.model.js";
 import Role from "../models/role.model.js";
+import Statistic from "../models/statistic.model.js";
 import Tutor from "../models/tutor.model.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcrypt";
@@ -118,7 +120,11 @@ export const viewTutorStudentList = async (req, res) => {
     });
   }
   try {
-    const studentList = await Allocation.findById(req.user.id)
+    const tutor = await Tutor.findOne({ user_id: req.user.id });
+    if (!tutor) {
+      return res.status(404).json({ message: "Tutor not found" });
+    }
+    const studentList = await Allocation.find({ tutor_id: tutor._id})
       .populate("tutor_id")
       .populate("student_id");
     if (!studentList) {
@@ -130,6 +136,29 @@ export const viewTutorStudentList = async (req, res) => {
     }
 
     res.status(200).json({ message: studentList });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const getStudentDashBoard = async (req, res) => {
+  if (req.user.role_name === "Student") {
+    return res.status(403).json({
+      message: "Access denied, Student cannot access this dashboard.",
+    });
+  }
+
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const messages = await Message.find({
+      $or: [
+        { sender_id: userId, receiver_id: id },
+        { sender_id: id, receiver_id: userId },
+      ],
+    });
+
+    return res.status(200).json(messages);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

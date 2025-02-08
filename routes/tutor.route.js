@@ -3,6 +3,7 @@ import {
   createTutor,
   deleteTutor,
   getAllTutors,
+  getStudentDashBoard,
   updateTutor,
   viewTutorStudentList,
 } from "../controllers/TutorController.js";
@@ -15,4 +16,5 @@ router.route("/create-tutor").post(createTutor);
 router.route("/update-tutor/:id").put(updateTutor);
 router.route("/delete-tutor/:id").delete(deleteTutor);
 router.route("/view-tutor-student-list").get(viewTutorStudentList);
+router.route("/get-student-dashboard/:id").get(getStudentDashBoard);
 export default router;
