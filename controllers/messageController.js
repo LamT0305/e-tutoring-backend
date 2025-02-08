@@ -3,18 +3,28 @@ import User from "../models/user.model.js";
 
 // authorized
 
-export const getMessagesBySender = async (req, res) => {
+export const getListOfMessengers = async (req, res) => {
   try {
-    const messages = await Message.find({ sender_id: req.user.id });
-    res.status(200).json({ messages: messages });
+    const messengers = await Message.aggregate([
+      {
+        $group: {
+          _id: "$receiver_id",
+        },
+      },
+    ]);
+    const listMessengers = messengers.map((ms) => ms._id);
+    res.status(200).json({ list: listMessengers });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
 
-export const getMessagesByReceiver = async (req, res) => {
+export const getMessagesBetweenUsers = async (req, res) => {
   try {
-    const messages = await Message.find({ receiver_id: req.params.id });
+    const messages = await Message.find({
+      receiver_id: req.params.id,
+      sender_id: req.user.id,
+    });
     return res.status(200).json({ messages: messages });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -28,7 +38,7 @@ export const sendMessage = async (req, res) => {
     if (!receiver_id || !content) {
       return res.status(400).json({ message: "all fields are required" });
     }
-    const isExisted = await User.exists(user_id);
+    const isExisted = await User.findById(user_id);
     if (!isExisted) {
       return res.status(404).send({ Message: "receiver not found" });
     }
@@ -47,9 +57,15 @@ export const sendMessage = async (req, res) => {
 export const updateMessage = async (req, res) => {
   try {
     const { content } = req.body;
-    const message = await Message.findByIdAndUpdate(req.params.id, content, {
-      new: true,
-    });
+    const message = await Message.findByIdAndUpdate(
+      req.params.id,
+      {
+        content: content,
+      },
+      {
+        new: true,
+      }
+    );
     res.status(200).json({ message: message });
   } catch (error) {
     return res.status(500).json({ message: error.message });

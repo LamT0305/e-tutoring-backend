@@ -1,17 +1,19 @@
 import express from "express";
 import {
   deleteMessage,
-  getMessagesByReceiver,
-  getMessagesBySender,
+  getListOfMessengers,
+  getMessagesBetweenUsers,
   sendMessage,
   updateMessage,
 } from "../controllers/messageController.js";
+import authMiddleware from "../middleware/auth.js";
 const router = express.Router();
 
-router.route("/sender-messages").get(getMessagesBySender);
-router.route("/receiver-messages/:id").get(getMessagesByReceiver);
-router.route("/delete-messages/:id").delete(deleteMessage);
-router.route("/update-messages/:id").put(updateMessage);
+router.use(authMiddleware);
+router.route("/sender-messages").get(getListOfMessengers);
+router.route("/receiver-messages/:id").get(getMessagesBetweenUsers);
+router.route("/delete-message/:id").delete(deleteMessage);
+router.route("/update-message/:id").put(updateMessage);
 router.route("/send-message").post(sendMessage);
 
 export default router;
