@@ -1,4 +1,5 @@
 // CRUD turtor
+import Allocation from "../models/allocation.model.js";
 import Role from "../models/role.model.js";
 import Tutor from "../models/tutor.model.js";
 import User from "../models/user.model.js";
@@ -105,6 +106,30 @@ export const deleteTutor = async (req, res) => {
     await User.findByIdAndDelete(user_id);
     await Tutor.findByIdAndDelete(req.params.id);
     return res.status(200).json({ message: "Tutor deleted successfully" });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const viewTutorStudentList = async (req, res) => {
+  if (req.user.role_name == "Student") {
+    return res.status(403).json({
+      message: "Access denied, Student can not access list student.",
+    });
+  }
+  try {
+    const studentList = await Allocation.findById(req.user.id)
+      .populate("tutor_id")
+      .populate("student_id");
+    if (!studentList) {
+      return res.status(400).json({ message: "invalid id" });
+    }
+
+    if (studentList.length == 0) {
+      return res.status(404).json({ message: "student list is empty" });
+    }
+
+    res.status(200).json({ message: studentList });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
