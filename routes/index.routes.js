@@ -4,6 +4,8 @@ import student from "./student.route.js";
 import tutor from "./tutor.route.js";
 import staff from "./staff.route.js";
 import message from "./message.route.js";
+import blog from "./blog.route.js";
+import comment from "./comment.route.js";
 
 const routes = {
   role: role,
@@ -12,6 +14,8 @@ const routes = {
   tutor: tutor,
   staff: staff,
   message: message,
+  blog: blog,
+  comment: comment,
 };
 
 export default routes;

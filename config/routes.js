@@ -7,6 +7,8 @@ const routers = (app) => {
   app.use("/api/v1/tutor", routes.tutor);
   app.use("/api/v1/staff", routes.staff);
   app.use("/api/v1/message", routes.message);
+  app.use("/api/v1/blog", routes.blog);
+  app.use("/api/v1/comment", routes.comment);
 };
 
 export default routers;

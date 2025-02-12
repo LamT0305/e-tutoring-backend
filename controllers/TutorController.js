@@ -125,17 +125,13 @@ export const viewTutorStudentList = async (req, res) => {
       return res.status(404).json({ message: "Tutor not found" });
     }
     const studentList = await Allocation.find({ tutor_id: tutor._id})
-      .populate("tutor_id")
       .populate("student_id");
-    if (!studentList) {
-      return res.status(400).json({ message: "invalid id" });
-    }
 
     if (studentList.length == 0) {
       return res.status(404).json({ message: "student list is empty" });
     }
 
-    res.status(200).json({ message: studentList });
+    res.status(200).json({ StudentList: studentList });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

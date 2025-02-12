@@ -138,3 +138,15 @@ export const deleteStudent = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+export const getStudentById = async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.id);
+    if (!student){
+      return res.status(404).json({message: 'Student not found'})
+    }
+    res.status(200).json({message: student});
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+}
