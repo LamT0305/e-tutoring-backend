@@ -12,7 +12,7 @@ const blogSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   status_upload: {
     type: String,
-    enum: ["wait for approval", "uploaded", "rejected"],
+    enum: ["-1", "0", "1"],   // -1: waiting for upload, 0: uploaded, 1: rejected
     require: true,
   },
 });

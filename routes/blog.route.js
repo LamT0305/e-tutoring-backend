@@ -1,9 +1,11 @@
 import express from "express";
 import authMiddleware from "../middleware/auth.js";
 import {
+  blogApproval,
   deleteBlog,
   getAllBlog,
   getBlogById,
+  getBlogWaitingApproval,
   updateBlog,
   uploadBlog,
 } from "../controllers/blogController.js";
@@ -16,5 +18,7 @@ router.route("/update-blog").put(updateBlog);
 router.route("/delete-blog").delete(deleteBlog);
 router.route("/get-all-blog").get(getAllBlog);
 router.route("/get-blog/:id").get(getBlogById);
+router.route("/get-list-blogs-pending").get(getBlogWaitingApproval);
+router.route("/approval/:id").put(blogApproval);
 
 export default router;

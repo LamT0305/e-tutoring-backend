@@ -34,7 +34,7 @@ export const uploadBlog = async (req, res) => {
         author_id: author_id,
         title: title,
         content: content,
-        status_upload: "wait for approval",
+        status_upload: "-1",
       });
       return res
         .status(200)
@@ -44,7 +44,7 @@ export const uploadBlog = async (req, res) => {
       author_id: author_id,
       title: title,
       content: content,
-      status_upload: "uploaded",
+      status_upload: "0",
     });
     res.status(200).json({ status: "Blog uploaded successfully!", blog: blog });
   } catch (error) {
@@ -77,6 +77,44 @@ export const deleteBlog = async (req, res) => {
   try {
     const blog = await Blog.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: "Blog deleted successfully" });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getBlogWaitingApproval = async (req, res) => {
+  try {
+    if (req.user.role_name === "Student") {
+      return res
+        .status(403)
+        .json({ message: "Access denied, studnet cannot access this page." });
+    }
+    const blogs = await Blog.find({ status_upload: "-1" });
+    if (!blog) {
+      return res
+        .status(404)
+        .json({ message: "There is no blog waiting to be uploaded." });
+    }
+    res.status(200).json({ blogs: blogs });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const blogApproval = async (req, res) => {
+  try {
+    if (req.user.role_name === "Student") {
+      return res
+        .status(403)
+        .json({ message: "Access denied, studnet cannot access this page." });
+    }
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) {
+      return res.status(404).json({ message: "blog not found" });
+    }
+    blog.status_upload = "0";
+    await blog.save();
+    res.status(200).json({ message: "Approval blog successfully" });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
