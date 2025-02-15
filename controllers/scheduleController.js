@@ -67,7 +67,7 @@ export const updateStatusSchedule = async (req, res) => {
       .status(403)
       .json({ message: "You are not authorized to access this resource" });
   try {
-    const status = req.body;
+    const { status } = req.body;
     const updatedSchedule = await Schedule.findByIdAndUpdate(
       req.params.id,
       {
@@ -110,7 +110,7 @@ export const getStudentScheduleHistory = async (req, res) => {
 
   try {
     const schedules = await Schedule.find({
-      student: req.user._id,
+      student: req.user.id,
       status: { $ne: "0" },
     });
     if (!schedules) {
@@ -119,5 +119,51 @@ export const getStudentScheduleHistory = async (req, res) => {
     res.status(200).json(schedules);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+export const viewScheduleRequest = async (req, res) => {
+  if (req.user.role_name !== "Tutor")
+    return res
+      .status(403)
+      .json({ message: "You are not authorized to access this resource" });
+  try {
+    const schedules = await Schedule.find({ tutor: req.user.id, status: "0" });
+    if (!schedules)
+      return res.status(404).json({ message: "No schedule found" });
+    res.status(200).json(schedules);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const filterScheduleByStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ message: "Status is required" });
+    }
+    const query = {
+      status: status,
+    };
+
+    if (req.user.role_name === "Student") {
+      query.student = req.user.id;
+    } else if (req.user.role_name === "Tutor") {
+      query.tutor = req.user.id;
+    } else {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to access this resource" });
+    }
+
+    const schedules = await Schedule.find(query);
+    if (!schedules.length) {
+      return res.status(404).json({ message: "No schedule found" });
+    }
+
+    res.status(200).json(schedules);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
   }
 };
