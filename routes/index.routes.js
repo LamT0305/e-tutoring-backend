@@ -6,6 +6,8 @@ import staff from "./staff.route.js";
 import message from "./message.route.js";
 import blog from "./blog.route.js";
 import comment from "./comment.route.js";
+import schedule from "./schedule.route.js";
+
 
 const routes = {
   role: role,
@@ -16,6 +18,7 @@ const routes = {
   message: message,
   blog: blog,
   comment: comment,
+  schedule: schedule,
 };
 
 export default routes;

@@ -9,6 +9,7 @@ const routers = (app) => {
   app.use("/api/v1/message", routes.message);
   app.use("/api/v1/blog", routes.blog);
   app.use("/api/v1/comment", routes.comment);
+  app.use("/api/v1/schedule", routes.schedule);
 };
 
 export default routers;
