@@ -1,0 +1,11 @@
+{
+  "web": {
+    "client_id": "241867326871-bcu8v1t88oceh41le7338nfmvjvadvif.apps.googleusercontent.com",
+    "project_id": "e-learning-449716",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "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",
+    "redirect_uris": ["http://localhost:3000/auth/google/callback"]
+  }
+}
