@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
     ref: "User",
   },
   content: { type: String, required: true },
-  sent_at: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
 });
 
 const Notification = mongoose.model("Notification", notificationSchema);

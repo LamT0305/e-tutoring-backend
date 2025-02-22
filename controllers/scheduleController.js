@@ -1,10 +1,19 @@
 import Schedule from "../models/schedule.model.js";
+import Notification from "../models/notification.model.js";
+import { sendNotification } from "../socket.js";
 
 // Create a new schedule
 export const createSchedule = async (req, res) => {
-  const { date, duration, subject, receiver_id, meetingType, note } = req.body;
+  const { date, duration, meetingType, note, receiver_id, subject } = req.body;
 
-  if (!date || !duration || !subject || !receiver_id || !meetingType) {
+  if (
+    !date ||
+    !duration ||
+    !subject ||
+    !receiver_id ||
+    !meetingType ||
+    !subject
+  ) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
@@ -20,9 +29,11 @@ export const createSchedule = async (req, res) => {
     if (req.user.role_name === "Student") {
       scheduleData.tutor = receiver_id;
       scheduleData.student = req.user.id;
+      scheduleData.status = "0";
     } else if (req.user.role_name === "Tutor") {
       scheduleData.tutor = req.user.id;
       scheduleData.student = receiver_id;
+      scheduleData.status = "1";
     } else {
       return res
         .status(403)
@@ -30,6 +41,16 @@ export const createSchedule = async (req, res) => {
     }
 
     const newSchedule = await Schedule.create(scheduleData);
+    const noti = await Notification.create({
+      user_id: receiver_id,
+      content: `${req.user.name} has requested a new schedule`,
+    });
+
+    sendNotification(receiver_id, {
+      message: `${req.user.name} has requested a new schedule`,
+      link: "/view-schedules",
+      noti: noti,
+    });
     return res.status(201).json(newSchedule);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -38,10 +59,6 @@ export const createSchedule = async (req, res) => {
 
 // Delete a schedule
 export const deleteSchedule = async (req, res) => {
-  if (req.user.role_name !== "Tutor")
-    return res
-      .status(403)
-      .json({ message: "You are not authorized to access this resource" });
   try {
     const deletedSchedule = await Schedule.findByIdAndDelete(req.params.id);
     if (!deletedSchedule) {
@@ -61,7 +78,7 @@ export const viewScheduleRequest = async (req, res) => {
       .json({ message: "You are not authorized to access this resource" });
 
   try {
-    const { page = 1} = req.query; // Default to page 1 and 10 10
+    const { page = 1 } = req.query; // Default to page 1 and 10 10
     const query = { tutor: req.user.id, status: "0" };
 
     const schedules = await Schedule.find(query)
@@ -89,14 +106,16 @@ export const viewScheduleRequest = async (req, res) => {
 //tutor and student
 export const filterScheduleByStatus = async (req, res) => {
   try {
-    const { page = 1 } = req.query;
-    const { status } = req.body;
-    if (!status) {
-      return res.status(400).json({ message: "Status is required" });
+    const { status, page } = req.body;
+
+    const query = {};
+    if (status) {
+      query.status = status;
     }
-    const query = {
-      status: status,
-    };
+
+    if (!page) {
+      page = 1;
+    }
 
     if (req.user.role_name === "Student") {
       query.student = req.user.id;
@@ -109,10 +128,13 @@ export const filterScheduleByStatus = async (req, res) => {
     }
 
     const schedules = await Schedule.find(query)
+      .populate("tutor")
+      .populate("student")
+      .sort({ createdAt: -1 })
       .skip((page - 1) * 10)
       .limit(10);
 
-    if (!schedules.length) {
+    if (!schedules) {
       return res.status(404).json({ message: "No schedule found" });
     }
 

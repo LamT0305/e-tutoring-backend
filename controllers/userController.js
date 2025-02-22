@@ -58,7 +58,12 @@ export const getUserProfile = async (req, res) => {
     switch (req.user.role_name) {
       case "Student":
         userProfile = await Student.findOne({ user_id: req.user.id })
-          .populate("tutor_ids")
+          .populate({
+            path: "tutor_ids",
+            populate: {
+              path: "user_id",
+            },
+          })
           .populate("user_id");
         break;
 

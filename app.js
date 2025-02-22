@@ -1,6 +1,5 @@
 import express from "express";
-import http from "http"; // Required for WebSockets
-import { Server } from "socket.io";
+import http from "http"; 
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
@@ -9,17 +8,13 @@ import bodyParser from "body-parser";
 
 import connectDB from "./config/dbConnection.js";
 import routers from "./config/routes.js";
-import Message from "./models/message.model.js";
+import { initializeSocket } from "./socket.js"; 
 
-dotenv.config(); // Load environment variables
+dotenv.config(); 
 
 const app = express();
-const server = http.createServer(app); // Create HTTP Server
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
-});
+const server = http.createServer(app);
+const io = initializeSocket(server); 
 
 const PORT = process.env.PORT || 3000;
 
@@ -32,6 +27,12 @@ app.use(express.urlencoded({ extended: true }));
 // Connect to Database
 connectDB();
 
+// Attach WebSocket instance to request
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 // Setup routes
 routers(app);
 
@@ -40,39 +41,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// WebSocket setup
-
-app.use((req, res, next) => {
-  req.io = io; // Attach socket instance to request
-  next();
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
-io.on("connection", (socket) => {
-  console.log(`User connected: ${socket.id}`);
-
-  socket.on("joinRoom", (roomId) => {
-    socket.join(roomId);
-    console.log(`User joined room: ${roomId}`);
-  });
-
-  socket.on("sendMessage", async (data) => {
-    const { sender_id, receiver_id, content } = data;
-    const conversationId = [sender_id, receiver_id].sort().join("_");
-
-    const message = {
-      sender_id,
-      receiver_id,
-      content,
-      created_at: new Date().toISOString(),
-    };
-    io.to(conversationId).emit("receiveMessage", message);
-    io.to(conversationId).emit("updateUserList");
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id}`);
-  });
-});
 
 app.get("/", (req, res) => {
   res.send("Hello World!");

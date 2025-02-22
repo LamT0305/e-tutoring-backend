@@ -1,22 +1,16 @@
 import Notification from "../models/notification.model.js";
-import User from "../models/user.model.js";
 
-export const sentNotifications = async (user_id, content) => {
+export const getAllNotifications = async (req, res) => {
   try {
-    if (!user_id || !content) {
-      return new String("user and content are required");
-    }
-    const isExisted = await User.findById(user_id).exists();
-    if (!isExisted) {
-      return new String("User does not exist");
-    }
+    const notifications = await Notification.find({
+      user_id: req.user.id,
+    }).sort({ createdAt: -1 });
 
-    const notification = await Notification.create({
-      user_id: user_id,
-      content: content,
-    });
-    return notification.toJSON();
+    res.status(200).json(notifications);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
