@@ -46,4 +46,9 @@ export const sendNotification = (receiver, data) => {
   }
 };
 
+export const sendNotiUpdateSchedule = (receiver, data) => {
+  if (io) {
+    io.to(receiver).emit("receiveNotiUpdateSchedule", data);
+  }
+};
 export { io };

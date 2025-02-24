@@ -43,30 +43,17 @@ export const createSchedule = async (req, res) => {
     const newSchedule = await Schedule.create(scheduleData);
     const noti = await Notification.create({
       user_id: receiver_id,
-      content: `${req.user.name} has requested a new schedule`,
+      title: "New schedule has been requested",
+      content: `${req.user.name} has requested a new schedule on ${date}`,
     });
 
     sendNotification(receiver_id, {
       message: `${req.user.name} has requested a new schedule`,
-      link: "/view-schedules",
       noti: noti,
     });
     return res.status(201).json(newSchedule);
   } catch (error) {
     return res.status(500).json({ message: error.message });
-  }
-};
-
-// Delete a schedule
-export const deleteSchedule = async (req, res) => {
-  try {
-    const deletedSchedule = await Schedule.findByIdAndDelete(req.params.id);
-    if (!deletedSchedule) {
-      return res.status(404).json({ message: "Schedule not found" });
-    }
-    res.status(200).json({ message: "Schedule deleted" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
 };
 
@@ -147,6 +134,53 @@ export const filterScheduleByStatus = async (req, res) => {
       currentPage: page,
       totalSchedules: total,
     });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+//tutor
+export const updateScheduleStatusByTutor = async (req, res) => {
+  const { status } = req.body;
+  if (!status) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+
+  try {
+    if (req.user.role_name !== "Tutor") {
+      return res
+        .status(403)
+        .json({ message: "You don't have permission to access this page." });
+    }
+
+    const schedule = await Schedule.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: status,
+      },
+      {
+        new: true,
+      }
+    );
+
+    const user_id = schedule.student;
+    let title = "";
+    if (status === "1") {
+      title = "Schedule has been accepted";
+    } else {
+      title = "Schedule has been rejected";
+    }
+    const noti = await Notification.create({
+      user_id: user_id,
+      title: title,
+      content: `Your ${title.toLowerCase()} by tutor: ${req.user.name}`,
+    });
+
+    sendNotification(user_id.toString(), {
+      message: title,
+      noti: noti,
+    });
+    res.status(200).json({ message: "Schedule updated.", schedule: schedule });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
