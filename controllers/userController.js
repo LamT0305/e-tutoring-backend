@@ -13,7 +13,7 @@ export const login = async (req, res) => {
       return errorResponse(res, 400, "Email and password are required");
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() })
+    const user = await User.findOne({ email: email })
       .select("+password")
       .where("isActive")
       .equals(true);

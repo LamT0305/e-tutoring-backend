@@ -114,8 +114,7 @@ export const deleteTutor = async (req, res) => {
       return errorResponse(res, 404, "Tutor not found");
     }
 
-    tutor.isActive = false;
-    await tutor.save();
+    await tutor.deleteOne();
 
     res.status(200).json({
       success: true,
