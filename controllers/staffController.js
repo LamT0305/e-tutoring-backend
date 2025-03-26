@@ -1,190 +1,228 @@
-import Allocation from "../models/allocation.model.js";
-import Role from "../models/role.model.js";
-import Student from "../models/student.model.js";
-import Tutor from "../models/tutor.model.js";
 import User from "../models/user.model.js";
-import bcrypt from "bcrypt";
+import Allocation from "../models/allocation.model.js";
+
+const errorResponse = (res, status, message) => {
+  return res.status(status).json({ success: false, message });
+};
 
 export const createStaff = async (req, res) => {
-  const { name, dateOfBirth, address, email, password, role_id } = req.body;
-  if (!name || !dateOfBirth || !address || !email || !password || !role_id) {
-    return res.status(400).json({
-      message: "All fields are required",
-      name: name,
-      dateOfBirth: dateOfBirth,
-      address: address,
-      email: email,
-      password: password,
-      role_id: role_id,
-    });
-  }
-
   try {
-    const role = await Role.findById(role_id);
-    if (!role) {
-      return res.status(400).json({ message: "Invalid role ID" });
+    const { name, dateOfBirth, address, email, password } = req.body;
+
+    if (
+      !name?.trim() ||
+      !dateOfBirth ||
+      !address?.trim() ||
+      !email?.trim() ||
+      !password
+    ) {
+      return errorResponse(res, 400, "All fields are required");
     }
 
-    const isExisted = await User.findOne({ email: email });
-    if (isExisted) {
-      return res.status(400).json({ message: "Email already exists" });
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return errorResponse(res, 400, "Email already exists");
     }
-    // Mã hóa mật khẩu
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newUser = new User({
-      name,
+    const newUser = await User.create({
+      name: name.trim(),
       dateOfBirth,
-      address,
-      email,
-      password: hashedPassword,
-      role_id,
+      address: address.trim(),
+      email: email.toLowerCase().trim(),
+      password,
+      role: "staff",
     });
-
-    await newUser.save();
 
     res.status(201).json({
-      message: "User created successfully",
-      user: {
-        name: newUser.name,
-        email: newUser.email,
-      },
+      success: true,
+      message: "Staff created successfully",
+      user: newUser.getProfile(),
     });
   } catch (error) {
-    console.error("Error creating user:", error);
-    res.status(500).json({ message: "Server error" });
+    return errorResponse(res, 500, error.message);
   }
 };
 
-export const getStaffs = async (req, res) => {
+export const getStaffList = async (req, res) => {
   try {
-    const staffs = await User.find({ role_id: req.params.id });
-    res.status(200).json({ message: "success", staffs: staffs });
+    if (req.user.role !== "staff") {
+      return errorResponse(
+        res,
+        403,
+        "Access denied. Only staff can access this resource"
+      );
+    }
+
+    const staffs = await User.find({ role: "staff", isActive: true })
+      .select("-password")
+      .sort({ created_at: -1 });
+
+    res.status(200).json({
+      success: true,
+      staffs,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: " Server error", error: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const allocateTutors = async (req, res) => {
-  const { tutorId, studentIds } = req.body;
-
   try {
-    if (req.user.role_name != "Staff") {
-      return res
-        .status(403)
-        .json({ message: " Access denied, only staff can allocate tutor" });
+    if (req.user.role !== "staff") {
+      return errorResponse(
+        res,
+        403,
+        "Access denied. Only staff can allocate tutors"
+      );
     }
-    const tutor = await Tutor.findById(tutorId);
+
+    const { tutorId, studentIds } = req.body;
+
+    const tutor = await User.findOne({
+      _id: tutorId,
+      role: "tutor",
+      isActive: true,
+    });
     if (!tutor) {
-      return res.status(404).json({ message: "Tutor not found" });
+      return errorResponse(res, 404, "Tutor not found or inactive");
     }
 
-    const students = await Student.find({ _id: { $in: studentIds } });
-    if (students.length !== studentIds.length) {
-      return res
-        .status(404)
-        .json({ message: "One or more students not found" });
-    }
-
-    const existingAllocation = await Allocation.find({
-      tutor_id: tutorId,
-      student_id: { $in: studentIds },
+    const students = await User.find({
+      _id: { $in: studentIds },
+      role: "student",
+      isActive: true,
     });
 
-    const allocatedStudentIds = existingAllocation.map((allocation) =>
-      allocation.student_id.toString()
+    if (students.length !== studentIds.length) {
+      return errorResponse(
+        res,
+        404,
+        "One or more students not found or inactive"
+      );
+    }
+
+    const existingAllocations = await Allocation.find({
+      tutor: tutorId,
+      student: { $in: studentIds },
+    });
+
+    const allocatedStudentIds = existingAllocations.map((allocation) =>
+      allocation.student.toString()
     );
 
-    const newStudent = studentIds.filter(
+    const newStudentIds = studentIds.filter(
       (id) => !allocatedStudentIds.includes(id.toString())
     );
 
-    if (newStudent.length === 0) {
-      return res.status(400).json({
-        message: "All students are already allocated",
-        existingAllocation: allocatedStudentIds,
-      });
+    if (newStudentIds.length === 0) {
+      return errorResponse(
+        res,
+        400,
+        "All students are already allocated to this tutor"
+      );
     }
-    const allocations = newStudent.map((studentId) => ({
-      tutor_id: tutorId,
-      student_id: studentId,
-    }));
 
-    await Allocation.insertMany(allocations);
-
-    await Student.updateMany(
-      { _id: { $in: newStudent } },
-      { $addToSet: { tutor_ids: tutorId } } //avoid duplicates
+    const allocations = await Allocation.insertMany(
+      newStudentIds.map((studentId) => ({
+        tutor: tutorId,
+        student: studentId,
+      }))
     );
 
     res.status(200).json({
-      message: "Allocation successful",
-      allocations: allocations,
+      success: true,
+      message: "Students allocated successfully",
+      allocations,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
-export const viewAllocations = async (req, res) => {
+export const getAllocations = async (req, res) => {
   try {
-    if (req.user.role_name != "Staff") {
-      return res
-        .status(403)
-        .json({ message: " Access denied, only staff can view allocation list" });
+    if (req.user.role !== "staff") {
+      return errorResponse(
+        res,
+        403,
+        "Access denied. Only staff can view allocations"
+      );
     }
-    console.log(req.user.role_name);
-    if (req.user.role_name == "Student") {
-      return res
-        .status(403)
-        .json({
-          message: "Access denied, student can not access the allocation list",
-        });
-    }
-    const allocations = await Allocation.find();
-    res.status(200).json({ message: "success", allocations: allocations });
+
+    const allocations = await Allocation.find()
+      .populate("tutor", "name email")
+      .populate("student", "name email")
+      .sort({ created_at: -1 });
+
+    res.status(200).json({
+      success: true,
+      allocations,
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const deleteAllocation = async (req, res) => {
   try {
-    console.log(req.user.role_name);
-
-    if (req.user.role_name != "Staff") {
-      return res
-        .status(403)
-        .json({ message: " Access denied, only staff can delete allocation" });
+    if (req.user.role !== "staff") {
+      return errorResponse(
+        res,
+        403,
+        "Access denied. Only staff can delete allocations"
+      );
     }
-    const allocation = await Allocation.findById(req.params.id);
+
+    const allocation = await Allocation.findById(req.params.id)
+      .populate("tutor", "name")
+      .populate("student", "name");
+
     if (!allocation) {
-      return res.status(404).json({ message: "Allocation not found" });
+      return errorResponse(res, 404, "Allocation not found");
     }
 
-    const studentId = allocation.student_id;
-    const student = await Student.findById(studentId);
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
+    await allocation.deleteOne();
 
-    // Filter out the tutor_id from the student's tutor_ids
-    student.tutor_ids = student.tutor_ids.filter(
-      (tutorId) => !tutorId.equals(allocation.tutor_id)
-    );
-    await student.save();
-
-    await Allocation.findByIdAndDelete(req.params.id);
-
-    return res
-      .status(200)
-      .json({ message: "Allocation deleted successfully", allocation });
+    res.status(200).json({
+      success: true,
+      message: "Allocation deleted successfully",
+      allocation,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "An error occurred", error: error.message });
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const toggleStaffStatus = async (req, res) => {
+  try {
+    if (req.user.role !== "staff") {
+      return errorResponse(
+        res,
+        403,
+        "Access denied. Only staff can perform this action"
+      );
+    }
+
+    const staff = await User.findOne({
+      _id: req.params.id,
+      role: "staff",
+    });
+
+    if (!staff) {
+      return errorResponse(res, 404, "Staff not found");
+    }
+
+    staff.isActive = !staff.isActive;
+    await staff.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Staff ${
+        staff.isActive ? "activated" : "deactivated"
+      } successfully`,
+      staff: staff.getProfile(),
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
   }
 };

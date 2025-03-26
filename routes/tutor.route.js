@@ -1,20 +1,21 @@
 import express from "express";
+import { auth, authorize } from "../middleware/auth.js";
 import {
-  createTutor,
-  deleteTutor,
   getAllTutors,
-  getStudentDashBoard,
+  createTutor,
   updateTutor,
-  viewTutorStudentList,
+  deleteTutor,
+  getTutorMessages,
 } from "../controllers/TutorController.js";
-import authMiddleware from "../middleware/auth.js";
+
 const router = express.Router();
 
-router.use(authMiddleware);
-router.route("/get-all-tutors").get(getAllTutors);
-router.route("/create-tutor").post(createTutor);
-router.route("/update-tutor/:id").put(updateTutor);
-router.route("/delete-tutor/:id").delete(deleteTutor);
-router.route("/view-tutor-student-list").get(viewTutorStudentList);
-router.route("/get-student-dashboard/:id").get(getStudentDashBoard);
+router.use(auth);
+
+router.get("/", getAllTutors);
+router.post("/", authorize(["staff"]), createTutor);
+router.put("/:id", updateTutor);
+router.delete("/:id", authorize(["staff"]), deleteTutor);
+router.get("/messages", authorize(["tutor"]), getTutorMessages);
+
 export default router;

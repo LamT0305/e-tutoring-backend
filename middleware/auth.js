@@ -1,18 +1,35 @@
-import jsonwebtoken from "jsonwebtoken";
-const authMiddleware = (req, res, next) => {
-  const token = req.header("Authorization")?.split(" ")[1]; // Bearer <token>
+import jwt from "jsonwebtoken";
 
-  if (!token) {
-    return res.status(401).json({ message: "Access denied, token missing!" });
-  }
-
+export const auth = (req, res, next) => {
   try {
-    const verified = jsonwebtoken.verify(token, process.env.JWT_SECRET);
-    req.user = verified; // Save the decoded token payload to the request object
+    const token = req.header("Authorization")?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Access denied, token missing",
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
     next();
   } catch (error) {
-    res.status(400).json({ message: "Invalid token!" });
+    res.status(401).json({
+      success: false,
+      message: "Invalid or expired token",
+    });
   }
 };
 
-export default authMiddleware;
+export const authorize = (roles = []) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied, insufficient permissions",
+      });
+    }
+    next();
+  };
+};

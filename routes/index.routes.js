@@ -1,4 +1,3 @@
-import role from "./role.route.js";
 import user from "./user.route.js";
 import student from "./student.route.js";
 import tutor from "./tutor.route.js";
@@ -10,7 +9,6 @@ import schedule from "./schedule.route.js";
 import notification from "./notification.route.js";
 
 const routes = {
-  role: role,
   user: user,
   student: student,
   tutor: tutor,

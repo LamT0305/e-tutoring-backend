@@ -1,35 +1,47 @@
 import Message from "../models/message.model.js";
-import User from "../models/user.model.js";
-// authorized
-export const getListOfMessengers = async (req, res) => {
-  const userId = req.user.id;
 
+const errorResponse = (res, status, message) => {
+  return res.status(status).json({ success: false, message });
+};
+
+export const getListOfMessengers = async (req, res) => {
   try {
+    const userId = req.user.id;
+
     const messages = await Message.find({
-      $or: [{ sender_id: userId }, { receiver_id: userId }],
+      $or: [{ sender: userId }, { receiver: userId }],
     })
-      .populate("sender_id", "name")
-      .populate("receiver_id", "name")
-      .sort({ created_at: -1 }); // Sort by latest message
+      .populate("sender", "name avatar")
+      .populate("receiver", "name avatar")
+      .sort({ createdAt: -1 });
 
     const userMap = new Map();
 
     messages.forEach((msg) => {
       const otherUserId =
-        msg.sender_id._id.toString() === userId
-          ? msg.receiver_id._id.toString()
-          : msg.sender_id._id.toString();
+        msg.sender._id.toString() === userId
+          ? msg.receiver._id.toString()
+          : msg.sender._id.toString();
 
       if (!userMap.has(otherUserId)) {
         userMap.set(otherUserId, {
           id: otherUserId,
           name:
-            msg.sender_id._id.toString() === userId
-              ? msg.receiver_id.name
-              : msg.sender_id.name,
-          lastMessageTime: msg.created_at,
+            msg.sender._id.toString() === userId
+              ? msg.receiver.name
+              : msg.sender.name,
+          avatar:
+            msg.sender._id.toString() === userId
+              ? msg.receiver.avatar
+              : msg.sender.avatar,
+          lastMessageTime: msg.createdAt,
           lastMessage: msg.content,
+          unreadCount:
+            msg.receiver._id.toString() === userId && !msg.isRead ? 1 : 0,
         });
+      } else if (msg.receiver._id.toString() === userId && !msg.isRead) {
+        const userData = userMap.get(otherUserId);
+        userData.unreadCount += 1;
       }
     });
 
@@ -37,10 +49,12 @@ export const getListOfMessengers = async (req, res) => {
       (a, b) => b.lastMessageTime - a.lastMessageTime
     );
 
-    res.status(200).json(sortedUsers);
+    res.status(200).json({
+      success: true,
+      conversations: sortedUsers,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).send("Internal Server Error");
+    return errorResponse(res, 500, error.message);
   }
 };
 
@@ -48,139 +62,188 @@ export const getMessagesBetweenUsers = async (req, res) => {
   try {
     const userId = req.user.id;
     const receiverId = req.params.id;
-    // Find messages exchanged between the two users
+
     const messages = await Message.find({
       $or: [
-        { sender_id: userId, receiver_id: receiverId },
-        { sender_id: receiverId, receiver_id: userId },
+        { sender: userId, receiver: receiverId },
+        { sender: receiverId, receiver: userId },
       ],
     })
-      .sort({ created_at: 1 }) // Sort messages by creation date
-      .populate("sender_id", "name") // Populate sender's name
-      .populate("receiver_id", "name"); // Populate receiver's name
+      .sort({ createdAt: 1 })
+      .populate("sender", "name avatar")
+      .populate("receiver", "name avatar");
 
-    res.status(200).json(messages);
+    // Mark unread messages as read
+    await Message.updateMany(
+      {
+        sender: receiverId,
+        receiver: userId,
+        isRead: false,
+      },
+      {
+        isRead: true,
+        readAt: new Date(),
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      messages,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).send("Internal Server Error");
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const sendMessage = async (req, res) => {
   try {
-    const { content, receiver_id } = req.body;
-    if (!content || !receiver_id) {
-      return res.status(400).json({ message: "Missing required fields" });
+    const { content, receiver, attachments } = req.body;
+
+    if (!content?.trim() && (!attachments || attachments.length === 0)) {
+      return errorResponse(
+        res,
+        400,
+        "Message content or attachments are required"
+      );
     }
 
     const newMessage = new Message({
-      sender_id: req.user.id,
-      receiver_id,
-      content,
+      sender: req.user.id,
+      receiver,
+      content: content?.trim() || "",
+      attachments: attachments || [],
     });
 
     await newMessage.save();
-    res.status(200).json(newMessage);
+    await newMessage.populate("sender", "name avatar");
+    await newMessage.populate("receiver", "name avatar");
+
+    // Socket.io emission
+    if (req.io) {
+      req.io.to(receiver).emit("newMessage", newMessage);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Message sent successfully",
+      data: newMessage,
+    });
   } catch (error) {
-    console.error("Error sending message:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    return errorResponse(res, 500, error.message);
   }
 };
-
-// authorized
 
 export const updateMessage = async (req, res) => {
   try {
-    const { content } = req.body;
     const message = await Message.findById(req.params.id)
-      .populate("sender_id", "_id")
-      .populate("receiver_id", "_id");
+      .populate("sender", "name avatar")
+      .populate("receiver", "name avatar");
 
     if (!message) {
-      return res.status(404).json({ message: "Message not found" });
+      return errorResponse(res, 404, "Message not found");
     }
 
-    if (!message.sender_id || !message.sender_id._id) {
-      console.error("Message sender_id is missing!");
-      return res.status(500).json({ message: "Invalid message data" });
+    if (message.sender._id.toString() !== req.user.id) {
+      return errorResponse(res, 403, "You can only edit your own messages");
     }
 
-    if (message.sender_id._id.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "You can only edit your own messages!" });
+    const { content } = req.body;
+    if (!content?.trim()) {
+      return errorResponse(res, 400, "Message content is required");
     }
 
-    message.content = content;
+    message.content = content.trim();
     await message.save();
 
-    // Ensure WebSocket is defined before emitting events
     if (req.io) {
-      if (message.receiver_id && message.receiver_id._id) {
-        req.io
-          .to(message.receiver_id._id.toString())
-          .emit("updateMessage", message);
-      }
       req.io
-        .to(message.sender_id._id.toString())
-        .emit("updateMessage", message);
-    } else {
-      console.error("Socket.IO (req.io) is undefined!");
+        .to(message.receiver._id.toString())
+        .emit("messageUpdated", message);
     }
 
-    res.status(200).json(message);
+    res.status(200).json({
+      success: true,
+      message: "Message updated successfully",
+      data: message,
+    });
   } catch (error) {
-    console.error("Error updating message:", error);
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
-// authorized
-
 export const deleteMessage = async (req, res) => {
   try {
-    const { id } = req.params;
-    const message = await Message.findById(id)
-      .populate("sender_id", "_id")
-      .populate("receiver_id", "_id");
+    const message = await Message.findById(req.params.id)
+      .populate("sender", "name avatar")
+      .populate("receiver", "name avatar");
 
     if (!message) {
-      return res.status(404).json({ message: "Message not found" });
+      return errorResponse(res, 404, "Message not found");
     }
 
-    console.log("Message data:", message); // Debugging
-
-    if (
-      !message.sender_id ||
-      !message.sender_id._id ||
-      !message.receiver_id ||
-      !message.receiver_id._id
-    ) {
-      console.error("Message sender_id or receiver_id is missing!");
-      return res.status(500).json({ message: "Invalid message data" });
+    if (message.sender._id.toString() !== req.user.id) {
+      return errorResponse(res, 403, "You can only delete your own messages");
     }
 
-    if (message.sender_id._id.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "You can only delete your own messages!" });
+    // Delete attachments if any
+    if (message.attachments && message.attachments.length > 0) {
+      // Add your file deletion logic here
     }
 
     await message.deleteOne();
 
-    // Ensure req.io is defined before emitting
     if (req.io) {
-      req.io
-        .to(message.receiver_id._id.toString())
-        .emit("deleteMessage", { id });
-      req.io.to(message.sender_id._id.toString()).emit("deleteMessage", { id });
-    } else {
-      console.error("Socket.IO (req.io) is undefined!");
+      req.io.to(message.receiver._id.toString()).emit("messageDeleted", {
+        messageId: message._id,
+      });
     }
 
-    res.status(200).json({ message: "Deleted message successfully!" });
+    res.status(200).json({
+      success: true,
+      message: "Message deleted successfully",
+    });
   } catch (error) {
-    console.error("Error deleting message:", error);
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const markAsRead = async (req, res) => {
+  try {
+    const { messageIds } = req.body;
+
+    await Message.updateMany(
+      {
+        _id: { $in: messageIds },
+        receiver: req.user.id,
+        isRead: false,
+      },
+      {
+        isRead: true,
+        readAt: new Date(),
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Messages marked as read",
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const count = await Message.countDocuments({
+      receiver: req.user.id,
+      isRead: false,
+    });
+
+    res.status(200).json({
+      success: true,
+      unreadCount: count,
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
   }
 };

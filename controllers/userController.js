@@ -1,88 +1,154 @@
 import User from "../models/user.model.js";
-import bcrypt from "bcrypt";
-import jsonwebtoken from "jsonwebtoken";
-import Student from "../models/student.model.js";
-import Tutor from "../models/tutor.model.js";
+import jwt from "jsonwebtoken";
 
-// authentication
+const errorResponse = (res, status, message) => {
+  return res.status(status).json({ success: false, message });
+};
+
 export const login = async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res
-      .status(400)
-      .json({ message: "Email and password are required!" });
-  }
   try {
-    const user = await User.findOne({ email }).populate("role_id");
-    if (!user) {
-      return res.status(400).json({ message: "User not found!" });
+    const { email, password } = req.body;
+
+    if (!email?.trim() || !password) {
+      return errorResponse(res, 400, "Email and password are required");
     }
 
-    const isMatch = bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials!" });
+    const user = await User.findOne({ email: email.toLowerCase() })
+      .select("+password")
+      .where("isActive")
+      .equals(true);
+
+    if (!user) {
+      return errorResponse(res, 404, "User not found");
     }
-    const token = jsonwebtoken.sign(
+
+    const isPasswordValid = await user.verifyPassword(password);
+    if (!isPasswordValid) {
+      return errorResponse(res, 401, "Invalid credentials");
+    }
+
+    const token = jwt.sign(
       {
         id: user._id,
         name: user.name,
-        role_id: user.role_id._id,
-        role_name: user.role_id.role_name,
+        role: user.role,
       },
       process.env.JWT_SECRET,
-      {
-        expiresIn: "1h",
-      }
+      { expiresIn: "3d" }
     );
 
     res.status(200).json({
+      success: true,
       message: "Login successful",
-      user: {
-        name: user.name,
-        email: user.email,
-        role_id: user.role_id._id,
-        role_name: user.role_id.role_name,
-      },
+      user: user.getProfile(),
       token,
     });
-    // res.send(user.role_id)
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const getUserProfile = async (req, res) => {
   try {
-    let userProfile;
+    const user = await User.findOne({
+      _id: req.user.id,
+      isActive: true,
+    }).select("-password");
 
-    switch (req.user.role_name) {
-      case "Student":
-        userProfile = await Student.findOne({ user_id: req.user.id })
-          .populate({
-            path: "tutor_ids",
-            populate: {
-              path: "user_id",
-            },
-          })
-          .populate("user_id");
-        break;
-
-      case "Tutor":
-        userProfile = await Tutor.findOne({ user_id: req.user.id }).populate(
-          "user_id"
-        );
-        break;
-
-      default:
-        userProfile = await User.findById(req.user.id).populate("role_id");
-        break;
-    }
-    if (!userProfile) {
-      return res.status(404).json({ message: "User profile not found." });
+    if (!user) {
+      return errorResponse(res, 404, "User profile not found");
     }
 
-    return res.status(200).json(userProfile);
+    res.status(200).json({
+      success: true,
+      user: user.getProfile(),
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const { name, dateOfBirth, address } = req.body;
+
+    const user = await User.findOne({
+      _id: req.user.id,
+      isActive: true,
+    });
+
+    if (!user) {
+      return errorResponse(res, 404, "User not found");
+    }
+
+    if (name) user.name = name.trim();
+    if (dateOfBirth) user.dateOfBirth = dateOfBirth;
+    if (address) user.address = address.trim();
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: user.getProfile(),
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return errorResponse(
+        res,
+        400,
+        "Current password and new password are required"
+      );
+    }
+
+    const user = await User.findById(req.user.id).select("+password");
+
+    const isPasswordValid = await user.verifyPassword(currentPassword);
+    if (!isPasswordValid) {
+      return errorResponse(res, 401, "Current password is incorrect");
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const updateAvatar = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return errorResponse(res, 404, "User not found");
+    }
+
+    if (!req.file) {
+      return errorResponse(res, 400, "No avatar file uploaded");
+    }
+
+    user.avatar = req.file.filename;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Avatar updated successfully",
+      avatar: user.avatar,
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
   }
 };

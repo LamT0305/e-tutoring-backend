@@ -1,17 +1,19 @@
 import express from "express";
-import authMiddleware from "../middleware/auth.js";
+import { auth } from "../middleware/auth.js";
 import {
   createSchedule,
-  filterScheduleByStatus,
-  updateScheduleStatusByTutor,
-  viewScheduleRequest,
+  viewScheduleRequests,
+  getSchedulesByStatus,
+  updateScheduleStatus,
 } from "../controllers/scheduleController.js";
 
 const router = express.Router();
-router.use(authMiddleware);
 
-router.route("/create-schedule").post(createSchedule);
-router.route("/view-schedule-request").get(viewScheduleRequest);
-router.route("/filter-schedule-by-status").post(filterScheduleByStatus);
-router.route("/update-schedule-request/:id").put(updateScheduleStatusByTutor);
+router.use(auth);
+
+router.post("/", createSchedule);
+router.get("/requests", viewScheduleRequests);
+router.get("/", getSchedulesByStatus);
+router.put("/:id/status", updateScheduleStatus);
+
 export default router;

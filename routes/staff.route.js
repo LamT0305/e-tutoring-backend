@@ -1,17 +1,24 @@
 import express from "express";
+import { auth, authorize } from "../middleware/auth.js";
 import {
-  allocateTutors,
   createStaff,
+  getStaffList,
+  allocateTutors,
+  getAllocations,
   deleteAllocation,
-  getStaffs,
-  viewAllocations,
+  toggleStaffStatus
 } from "../controllers/staffController.js";
-import authMiddleware from "../middleware/auth.js"
+
 const router = express.Router();
-router.use(authMiddleware)
-router.route("/create-staff").post(createStaff);
-router.route("/get-all-staffs/:id").get(getStaffs);
-router.route("/allocation").post(allocateTutors);
-router.route("/allocation").get(viewAllocations);
-router.route("/delete-allocation/:id").delete(deleteAllocation);
+
+router.use(auth);
+router.use(authorize(['staff']));
+
+router.post('/', createStaff);
+router.get('/', getStaffList);
+router.post('/allocate', allocateTutors);
+router.get('/allocations', getAllocations);
+router.delete('/allocations/:id', deleteAllocation);
+router.patch('/:id/status', toggleStaffStatus);
+
 export default router;

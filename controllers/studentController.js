@@ -1,163 +1,181 @@
-// CRUD student (done)
-import bcrypt from "bcrypt";
-import Role from "../models/role.model.js";
-import Student from "../models/student.model.js";
 import User from "../models/user.model.js";
 
-export const getAllStudents = async (req, res, next) => {
+const errorResponse = (res, status, message) => {
+  return res.status(status).json({ success: false, message });
+};
+
+export const getAllStudents = async (req, res) => {
   try {
-    const { page = 1} = req.query;
-
-    const students = await Student.find()
+    const students = await User.find({ role: "student", isActive: true })
+      .select("-password")
       .populate({
-        path: "user_id",
-        populate: {
-          path: "role_id",
-          model: "Role",
-        },
+        path: "tutors",
+        select: "name email avatar subjects",
       })
-      .populate("tutor_ids")
-      .skip((page - 1) * 10)
-      .limit(parseInt(10));
-
-    const total = await Student.countDocuments();
-    const totalPages = Math.ceil(total / 10);
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
-      message: "success",
-      students: students,
-      totalPages: totalPages,
-      currentPage: parseInt(page),
-      totalStudents: total,
+      success: true,
+      students,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const createStudent = async (req, res) => {
-  if (req.user.role_name !== "Staff") {
-    return res.status(403).json({
-      message: "Access denied, Only staff members can create students.",
-    });
-  }
-
-  const { name, dateOfBirth, address, email, password, role_id } = req.body;
-
-  if (!name || !dateOfBirth || !address || !email || !password || !role_id) {
-    return res.status(400).json({
-      message: "All fields are required",
-      name: name,
-      dateOfBirth: dateOfBirth,
-      address: address,
-      email: email,
-      password: password,
-      role_id: role_id,
-    });
-  }
-
   try {
-    const role = await Role.findById(role_id);
-    if (!role) {
-      return res.status(400).json({ message: "Invalid role ID" });
+    if (req.user.role !== "staff") {
+      return errorResponse(res, 403, "Only staff members can create students");
     }
 
-    const isExisted = await User.findOne({ email: email });
-    if (isExisted) {
-      return res.status(400).json({ message: "Email already exists" });
-    }
-    // Mã hóa mật khẩu
-    const salt = await bcrypt.genSalt(10); // Tạo một "muối" với độ mạnh 10
-    const hashedPassword = await bcrypt.hash(password, salt); // Mã hóa mật khẩu
+    const { name, dateOfBirth, address, email, password } = req.body;
 
-    const newUser = new User({
-      name,
+    if (
+      !name?.trim() ||
+      !dateOfBirth ||
+      !address?.trim() ||
+      !email?.trim() ||
+      !password
+    ) {
+      return errorResponse(res, 400, "All fields are required");
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return errorResponse(res, 400, "Email already exists");
+    }
+
+    const newStudent = await User.create({
+      name: name.trim(),
       dateOfBirth,
-      address,
-      email,
-      password: hashedPassword,
-      role_id,
+      address: address.trim(),
+      email: email.toLowerCase().trim(),
+      password,
+      role: "student",
     });
-
-    await newUser.save();
-
-    const newStudent = new Student({
-      user_id: newUser._id,
-      tutor_id: null,
-    });
-
-    await newStudent.save();
 
     res.status(201).json({
-      message: "User created successfully",
-      user: {
-        id: newStudent._id,
-        name: newUser.name,
-        email: newUser.email,
-        role_id: newUser.role_id,
-      },
+      success: true,
+      message: "Student created successfully",
+      student: newStudent.getProfile(),
     });
   } catch (error) {
-    console.error("Error creating user:", error);
-    res.status(500).json({ message: "Server error" });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const updateStudent = async (req, res) => {
-  const { name, dateOfBirth, address } = req.body;
-  if (!name || !dateOfBirth || !address) {
-    return res.status(400).json({ message: "All fields must be provided" });
-  }
   try {
-    const student = await Student.findById(req.params.id);
+    const { name, dateOfBirth, address, subjects } = req.body;
+
+    const student = await User.findOne({
+      _id: req.params.id,
+      role: "student",
+    });
+
     if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
-    const user_id = student.user_id;
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return errorResponse(res, 404, "Student not found");
     }
 
-    user.name = name;
-    user.dateOfBirth = dateOfBirth;
-    user.address = address;
+    // Check authorization
+    if (req.user.role !== "staff" && req.user.id !== student.id) {
+      return errorResponse(res, 403, "Not authorized to update this student");
+    }
 
-    await user.save();
-    res.status(200).json({ message: "Updated user successful" });
+    if (name) student.name = name.trim();
+    if (dateOfBirth) student.dateOfBirth = dateOfBirth;
+    if (address) student.address = address.trim();
+    if (subjects) student.subjects = subjects;
+
+    await student.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Student updated successfully",
+      student: student.getProfile(),
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const deleteStudent = async (req, res) => {
-  if (req.user.role_name !== "Staff") {
-    return res.status(403).json({
-      message: "Access denied, Only staff members can delete students.",
-    });
-  }
   try {
-    const student = await Student.findById(req.params.id);
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
+    if (req.user.role !== "staff") {
+      return errorResponse(res, 403, "Only staff members can delete students");
     }
-    const user_id = student.user_id;
-    await User.findByIdAndDelete(user_id);
-    await Student.findByIdAndDelete(req.params.id);
-    return res.status(200).json({ message: "Student deleted successfully" });
+
+    const student = await User.findOne({
+      _id: req.params.id,
+      role: "student",
+    });
+
+    if (!student) {
+      return errorResponse(res, 404, "Student not found");
+    }
+
+    // Soft delete
+    student.isActive = false;
+    await student.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Student deleted successfully",
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const getStudentById = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.id);
+    const student = await User.findOne({
+      _id: req.params.id,
+      role: "student",
+      isActive: true,
+    })
+      .select("-password")
+      .populate({
+        path: "tutors",
+        select: "name email avatar subjects",
+      });
+
     if (!student) {
-      return res.status(404).json({ message: "Student not found" });
+      return errorResponse(res, 404, "Student not found");
     }
-    res.status(200).json({ message: student });
+
+    res.status(200).json({
+      success: true,
+      student,
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const getStudentTutors = async (req, res) => {
+  try {
+    const student = await User.findOne({
+      _id: req.params.id,
+      role: "student",
+      isActive: true,
+    })
+      .select("tutors")
+      .populate({
+        path: "tutors",
+        select: "name email avatar subjects rating",
+      });
+
+    if (!student) {
+      return errorResponse(res, 404, "Student not found");
+    }
+
+    res.status(200).json({
+      success: true,
+      tutors: student.tutors,
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
   }
 };

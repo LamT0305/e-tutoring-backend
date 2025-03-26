@@ -1,16 +1,16 @@
 import routes from "../routes/index.routes.js";
 
 const routers = (app) => {
-  app.use("/api/v1/role", routes.role);
-  app.use("/api/v1/user", routes.user);
-  app.use("/api/v1/student", routes.student);
-  app.use("/api/v1/tutor", routes.tutor);
+  // API routes
+  app.use("/api/v1/users", routes.user);
+  app.use("/api/v1/students", routes.student);
+  app.use("/api/v1/tutors", routes.tutor);
   app.use("/api/v1/staff", routes.staff);
-  app.use("/api/v1/message", routes.message);
-  app.use("/api/v1/blog", routes.blog);
-  app.use("/api/v1/comment", routes.comment);
-  app.use("/api/v1/schedule", routes.schedule);
-  app.use("/api/v1/notification", routes.notification);
+  app.use("/api/v1/messages", routes.message);
+  app.use("/api/v1/blogs", routes.blog);
+  app.use("/api/v1/comments", routes.comment);
+  app.use("/api/v1/schedules", routes.schedule);
+  app.use("/api/v1/notifications", routes.notification);
 };
 
 export default routers;

@@ -1,26 +1,31 @@
 import express from "express";
-import authMiddleware from "../middleware/auth.js";
+import { auth, authorize } from "../middleware/auth.js";
+import { upload } from "../middleware/upload.js";
 import {
-  blogApproval,
-  deleteBlog,
   getAllBlog,
   getBlogById,
-  getBlogWaitingApproval,
-  manageUserBlogs,
-  updateBlog,
   uploadBlog,
+  updateBlog,
+  deleteBlog,
+  getBlogWaitingApproval,
+  blogApproval,
+  manageUserBlogs,
 } from "../controllers/blogController.js";
 
 const router = express.Router();
 
-router.use(authMiddleware);
-router.route("/upload-blog").post(uploadBlog);
-router.route("/update-blog/:id").put(updateBlog);
-router.route("/delete-blog/:id").delete(deleteBlog);
-router.route("/get-all-blog").get(getAllBlog);
-router.route("/get-blog/:id").get(getBlogById);
-router.route("/get-list-blogs-pending").get(getBlogWaitingApproval);
-router.route("/approval/:id").put(blogApproval);
-router.route("/my-blogs").get(manageUserBlogs);
+router.use(auth);
+
+// Public routes
+router.get("/", getAllBlog);
+router.get("/:id", getBlogById);
+
+// Protected routes
+router.post("/", upload.single("image"), uploadBlog);
+router.put("/:id", upload.single("image"), updateBlog);
+router.delete("/:id", deleteBlog);
+router.get("/pending/list", authorize(["staff"]), getBlogWaitingApproval);
+router.put("/approve/:id", authorize(["staff"]), blogApproval);
+router.get("/my-blogs", manageUserBlogs);
 
 export default router;

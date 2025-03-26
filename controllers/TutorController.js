@@ -1,161 +1,144 @@
-// CRUD turtor
-import Allocation from "../models/allocation.model.js";
-import Message from "../models/message.model.js";
-import Role from "../models/role.model.js";
-import Statistic from "../models/statistic.model.js";
-import Tutor from "../models/tutor.model.js";
 import User from "../models/user.model.js";
-import bcrypt from "bcrypt";
+import Message from "../models/message.model.js";
+
+const errorResponse = (res, status, message) => {
+  return res.status(status).json({ success: false, message });
+};
 
 export const getAllTutors = async (req, res) => {
   try {
-    const tutors = await Tutor.find().populate({
-      path: "user_id", // Populate user_id
-      populate: {
-        path: "role_id", // Populate role_id within user_id
-        model: "Role", // Reference the Role model
-      },
+    const tutors = await User.find({
+      role: "tutor",
+      isActive: true,
+    })
+      .select("-password")
+      .sort({ created_at: -1 });
+
+    res.status(200).json({
+      success: true,
+      tutors,
     });
-    res.status(200).json({ message: "success", tutors: tutors });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const createTutor = async (req, res) => {
-  const { name, dateOfBirth, address, email, password, role_id } = req.body;
-  if (!name || !dateOfBirth || !address || !email || !password || !role_id) {
-    return res.status(400).json({
-      message: "All fields are required",
-      name: name,
-      dateOfBirth: dateOfBirth,
-      address: address,
-      email: email,
-      password: password,
-      role_id: role_id,
-    });
-  }
-
   try {
-    const role = await Role.findById(role_id);
-    if (!role) {
-      return res.status(400).json({ message: "Invalid role ID" });
+    if (req.user.role !== "staff") {
+      return errorResponse(res, 403, "Only staff members can create tutors");
     }
 
-    const isExisted = await User.findOne({ email: email });
-    if (isExisted) {
-      return res.status(400).json({ message: "Email already exists" });
-    }
-    // Mã hóa mật khẩu
-    const salt = await bcrypt.genSalt(10); // Tạo một "muối" với độ mạnh 10
-    const hashedPassword = await bcrypt.hash(password, salt); // Mã hóa mật khẩu
+    const { name, dateOfBirth, address, email, password } = req.body;
 
-    const newUser = new User({
-      name,
+    if (
+      !name?.trim() ||
+      !dateOfBirth ||
+      !address?.trim() ||
+      !email?.trim() ||
+      !password
+    ) {
+      return errorResponse(res, 400, "All required fields must be provided");
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return errorResponse(res, 400, "Email already exists");
+    }
+
+    const newTutor = await User.create({
+      name: name.trim(),
       dateOfBirth,
-      address,
-      email,
-      password: hashedPassword,
-      role_id,
+      address: address.trim(),
+      email: email.toLowerCase(),
+      password,
+      role: "tutor",
     });
 
-    await newUser.save();
-
-    const newTutor = await Tutor.create({
-      user_id: newUser._id,
+    res.status(201).json({
+      success: true,
+      message: "Tutor created successfully",
+      tutor: newTutor.getProfile(),
     });
-
-    res.status(200).json({ message: "User created successfully" });
-  } catch (e) {
-    return res.status(500).json({ message: e.message });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const updateTutor = async (req, res) => {
-  const { name, dateOfBirth, address } = req.body;
-  if (!name || !dateOfBirth || !address) {
-    return res.status(400).json({ message: "All fields must be provided" });
-  }
   try {
-    const tutor = await Tutor.findById(req.params.id);
+    const { name, dateOfBirth, address } = req.body;
+
+    const tutor = await User.findOne({
+      _id: req.params.id,
+      role: "tutor",
+      isActive: true,
+    });
+
     if (!tutor) {
-      return res.status(404).json({ message: "Tutor not found" });
-    }
-    const user_id = tutor.user_id;
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return errorResponse(res, 404, "Tutor not found");
     }
 
-    user.name = name;
-    user.dateOfBirth = dateOfBirth;
-    user.address = address;
+    if (req.user.role !== "staff" && req.user.id !== tutor.id) {
+      return errorResponse(res, 403, "Not authorized to update this tutor");
+    }
 
-    await user.save();
-    res.status(200).json({ message: "Updated user successful" });
+    if (name) tutor.name = name.trim();
+    if (dateOfBirth) tutor.dateOfBirth = dateOfBirth;
+    if (address) tutor.address = address.trim();
+
+    await tutor.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Tutor updated successfully",
+      tutor: tutor.getProfile(),
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
 export const deleteTutor = async (req, res) => {
   try {
-    const tutor = await Tutor.findById(req.params.id);
-    if (!tutor) {
-      return res.status(404).json({ message: "Tutor not found" });
+    if (req.user.role !== "staff") {
+      return errorResponse(res, 403, "Only staff members can delete tutors");
     }
-    const user_id = tutor.user_id;
-    await User.findByIdAndDelete(user_id);
-    await Tutor.findByIdAndDelete(req.params.id);
-    return res.status(200).json({ message: "Tutor deleted successfully" });
+
+    const tutor = await User.findOne({
+      _id: req.params.id,
+      role: "tutor",
+    });
+
+    if (!tutor) {
+      return errorResponse(res, 404, "Tutor not found");
+    }
+
+    tutor.isActive = false;
+    await tutor.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Tutor deleted successfully",
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
 
-export const viewTutorStudentList = async (req, res) => {
-  if (req.user.role_name == "Student") {
-    return res.status(403).json({
-      message: "Access denied, Student can not access list student.",
-    });
-  }
+export const getTutorMessages = async (req, res) => {
   try {
-    const tutor = await Tutor.findOne({ user_id: req.user.id });
-    if (!tutor) {
-      return res.status(404).json({ message: "Tutor not found" });
-    }
-    const studentList = await Allocation.find({ tutor_id: tutor._id})
-      .populate("student_id");
-
-    if (studentList.length == 0) {
-      return res.status(404).json({ message: "student list is empty" });
-    }
-
-    res.status(200).json({ StudentList: studentList });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
-};
-
-export const getStudentDashBoard = async (req, res) => {
-  if (req.user.role_name === "Student") {
-    return res.status(403).json({
-      message: "Access denied, Student cannot access this dashboard.",
-    });
-  }
-
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
     const messages = await Message.find({
-      $or: [
-        { sender_id: userId, receiver_id: id },
-        { sender_id: id, receiver_id: userId },
-      ],
-    });
+      $or: [{ sender: req.user.id }, { receiver: req.user.id }],
+    })
+      .sort({ created_at: -1 })
+      .limit(10);
 
-    return res.status(200).json(messages);
+    res.status(200).json({
+      success: true,
+      messages,
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return errorResponse(res, 500, error.message);
   }
 };
