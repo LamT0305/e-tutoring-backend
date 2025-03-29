@@ -152,3 +152,15 @@ export const updateAvatar = async (req, res) => {
     return errorResponse(res, 500, error.message);
   }
 };
+
+export const getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({ isActive: true }).select("-password");
+    res.status(200).json({
+      success: true,
+      users,
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
+  }
+};

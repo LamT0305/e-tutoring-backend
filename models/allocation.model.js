@@ -5,12 +5,12 @@ const allocationSchema = new mongoose.Schema({
   student_id: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    ref: "Student",
+    ref: "User",
   },
   tutor_id: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    ref: "Tutor",
+    ref: "User",
   },
   allocated_at: { type: Date, default: Date.now },
 });

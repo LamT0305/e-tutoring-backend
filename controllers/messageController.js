@@ -70,10 +70,9 @@ export const getMessagesBetweenUsers = async (req, res) => {
       ],
     })
       .sort({ createdAt: 1 })
-      .populate("sender", "name avatar")
-      .populate("receiver", "name avatar");
+      .populate("sender")
+      .populate("receiver");
 
-    // Mark unread messages as read
     await Message.updateMany(
       {
         sender: receiverId,
@@ -88,7 +87,7 @@ export const getMessagesBetweenUsers = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      messages,
+      data: messages,
     });
   } catch (error) {
     return errorResponse(res, 500, error.message);
@@ -120,7 +119,9 @@ export const sendMessage = async (req, res) => {
 
     // Socket.io emission
     if (req.io) {
-      req.io.to(receiver).emit("newMessage", newMessage);
+      const conversationId = [req.user.id, receiver].sort().join("_");
+      req.io.to(conversationId).emit("receiveMessage", newMessage);
+      req.io.emit("refreshUserList"); 
     }
 
     res.status(201).json({
@@ -156,9 +157,10 @@ export const updateMessage = async (req, res) => {
     await message.save();
 
     if (req.io) {
-      req.io
-        .to(message.receiver._id.toString())
-        .emit("messageUpdated", message);
+      const conversationId = [req.user.id, message.receiver._id.toString()]
+        .sort()
+        .join("_");
+      req.io.to(conversationId).emit("messageUpdated", message);
     }
 
     res.status(200).json({
@@ -193,8 +195,12 @@ export const deleteMessage = async (req, res) => {
     await message.deleteOne();
 
     if (req.io) {
-      req.io.to(message.receiver._id.toString()).emit("messageDeleted", {
+      const conversationId = [req.user.id, message.receiver._id.toString()]
+        .sort()
+        .join("_");
+      req.io.to(conversationId).emit("messageDeleted", {
         messageId: message._id,
+        conversationId,
       });
     }
 

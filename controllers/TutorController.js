@@ -1,5 +1,6 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
+import Allocation from "../models/allocation.model.js";
 
 const errorResponse = (res, status, message) => {
   return res.status(status).json({ success: false, message });
@@ -141,3 +142,19 @@ export const getTutorMessages = async (req, res) => {
     return errorResponse(res, 500, error.message);
   }
 };
+
+export const getStudentsAssignedToTutor = async (req, res) => {
+  try {
+    const students = await Allocation.find({ tutor_id: req.user.id})
+      .populate("student_id", "-password")
+      .sort({ created_at: -1 });
+
+    res.status(200).json({
+      success: true,
+      students,
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
+  }
+};
+

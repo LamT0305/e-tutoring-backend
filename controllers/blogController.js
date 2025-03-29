@@ -17,8 +17,11 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${uniqueSuffix}-${file.originalname.replace(/\s+/g, "-")}`);
+    // Get file extension
+    const ext = path.extname(file.originalname);
+    // Create shorter unique filename using timestamp and 4-digit random number
+    const uniqueSuffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    cb(null, `${uniqueSuffix}${ext}`);
   },
 });
 
@@ -49,7 +52,7 @@ export const getAllBlog = async (req, res) => {
   try {
     const { sort = "-createdAt", tags } = req.query;
     const query = tags ? { tags: { $in: tags.split(",") } } : {};
-
+    query.status_upload = 0;
     const blogs = await Blog.find(query)
       .populate("author_id", "name email avatar")
       .sort(sort);
@@ -112,9 +115,9 @@ export const uploadBlog = async (req, res) => {
       const blogData = {
         author_id: req.user.id,
         title: title.trim(),
-        content: content.trim(),
+        content: content,
         image: req.file ? `/uploads/${req.file.filename}` : "",
-        status_upload: req.user.role === "Student" ? "-1" : "0",
+        status_upload: req.user.role === "student" ? "-1" : "0",
         tags: tags ? tags.split(",").map((tag) => tag.trim()) : [],
       };
 
@@ -123,7 +126,7 @@ export const uploadBlog = async (req, res) => {
       res.status(201).json({
         success: true,
         message:
-          req.user.role === "Student"
+          req.user.role === "student"
             ? "Blog submitted for approval"
             : "Blog published successfully",
         blog,
@@ -156,9 +159,7 @@ export const updateBlog = async (req, res) => {
       }
 
       // Check ownership
-      if (
-        blog.author_id.toString() !== req.user.id 
-      ) {
+      if (blog.author_id.toString() !== req.user.id) {
         if (req.file) {
           fs.unlinkSync(req.file.path);
         }
@@ -215,9 +216,7 @@ export const deleteBlog = async (req, res) => {
     }
 
     // Check ownership or admin rights
-    if (
-      blog.author_id.toString() !== req.user.id
-    ) {
+    if (blog.author_id.toString() !== req.user.id) {
       return errorResponse(res, 403, "Not authorized to delete this blog");
     }
 
@@ -242,7 +241,7 @@ export const deleteBlog = async (req, res) => {
 
 export const getBlogWaitingApproval = async (req, res) => {
   try {
-    if (req.user.role === "Student") {
+    if (req.user.role === "student") {
       return errorResponse(
         res,
         403,
@@ -250,10 +249,9 @@ export const getBlogWaitingApproval = async (req, res) => {
       );
     }
 
-    const blogs = await Blog.find({ status_upload: "-1" }).populate(
-      "author_id",
-      "name email avatar"
-    );
+    const blogs = await Blog.find({ status_upload: "-1" })
+      .populate("author_id", "name email avatar")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -266,7 +264,7 @@ export const getBlogWaitingApproval = async (req, res) => {
 
 export const blogApproval = async (req, res) => {
   try {
-    if (req.user.role === "Student") {
+    if (req.user.role === "student") {
       return errorResponse(
         res,
         403,
@@ -274,13 +272,17 @@ export const blogApproval = async (req, res) => {
       );
     }
 
+    const { status } = req.body;
     const blog = await Blog.findById(req.params.id);
 
     if (!blog) {
       return errorResponse(res, 404, "Blog not found");
     }
-
-    blog.status_upload = "0";
+    if (status === "0") {
+      blog.status_upload = "0";
+    } else {
+      blog.status_upload = "1";
+    }
     await blog.save();
 
     res.status(200).json({
@@ -297,12 +299,13 @@ export const manageUserBlogs = async (req, res) => {
     const { status, sort = "-createdAt" } = req.query;
 
     const query = {
-      author_id: req.params.id,
-      ...(status && { status_upload: status }),
+      author_id: req.user.id,
     };
-
+    if (status) {
+      query.status_upload = status;
+    }
     const blogs = await Blog.find(query)
-      .populate("author_id", "name email avatar")
+      .populate("author_id", "name email")
       .sort(sort);
 
     res.status(200).json({

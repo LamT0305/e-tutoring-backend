@@ -24,7 +24,7 @@ const blogSchema = new mongoose.Schema(
     status_upload: {
       type: String,
       enum: {
-        values: ["-1", "0", "1"],
+        values: ["-1", "0", "1"], // -1: pending, 0: approved, 1: rejected
         message: "Invalid status value",
       },
       default: "-1",

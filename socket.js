@@ -5,7 +5,8 @@ let io;
 export const initializeSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: "*",
+      origin: process.env.FRONTEND_URL || "http://localhost:5173",
+      credentials: true,
     },
   });
 
@@ -17,19 +18,25 @@ export const initializeSocket = (server) => {
       console.log(`User joined room: ${roomId}`);
     });
 
-    socket.on("sendMessage", async (data) => {
-      const { sender_id, receiver_id, content } = data;
-      const conversationId = [sender_id, receiver_id].sort().join("_");
+    socket.on("sendMessage", (data) => {
+      const { conversationId } = data;
+      io.to(conversationId).emit("receiveMessage", data);
+      io.emit("refreshUserList");
+    });
 
-      const message = {
-        sender_id,
-        receiver_id,
-        content,
-        created_at: new Date().toISOString(),
-      };
+    socket.on("updateMessage", (data) => {
+      const { conversationId } = data;
+      io.to(conversationId).emit("messageUpdated", data);
+    });
 
-      io.to(conversationId).emit("receiveMessage", message);
-      io.to(conversationId).emit("updateUserList");
+    socket.on("deleteMessage", (data) => {
+      const { conversationId, messageId } = data;
+      io.to(conversationId).emit("messageDeleted", { messageId });
+    });
+
+    socket.on("leaveRoom", (roomId) => {
+      socket.leave(roomId);
+      console.log(`User left room: ${roomId}`);
     });
 
     socket.on("disconnect", () => {
@@ -42,13 +49,8 @@ export const initializeSocket = (server) => {
 
 export const sendNotification = (receiver, data) => {
   if (io) {
-    io.to(receiver).emit("receiveNotification", data);
+    io.to(receiver).emit("notification", data);
   }
 };
 
-export const sendNotiUpdateSchedule = (receiver, data) => {
-  if (io) {
-    io.to(receiver).emit("receiveNotiUpdateSchedule", data);
-  }
-};
 export { io };

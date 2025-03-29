@@ -7,6 +7,7 @@ import {
   updateProfile,
   changePassword,
   updateAvatar,
+  getAllUsers,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -16,6 +17,7 @@ router.post("/login", login);
 
 // Protected routes
 router.use(auth);
+router.get("/get-all-users", getAllUsers);
 router.get("/profile", getUserProfile);
 router.put("/profile", updateProfile);
 router.put("/change-password", changePassword);

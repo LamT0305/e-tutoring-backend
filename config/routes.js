@@ -11,6 +11,7 @@ const routers = (app) => {
   app.use("/api/v1/comments", routes.comment);
   app.use("/api/v1/schedules", routes.schedule);
   app.use("/api/v1/notifications", routes.notification);
+  app.use("/api/v1/analytics", routes.analytic);
 };
 
 export default routers;

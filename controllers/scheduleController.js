@@ -8,53 +8,36 @@ const errorResponse = (res, status, message) => {
 
 export const createSchedule = async (req, res) => {
   try {
+    if (req.user.role !== "tutor") {
+      return errorResponse(res, 403, "Only tutors can create schedules");
+    }
+
     const {
       startTime,
       endTime,
-      duration,
       meetingType,
       notes,
-      receiverId,
+      studentId,
       subject,
       location,
+      meetingLink,
     } = req.body;
 
-    if (
-      !startTime ||
-      !endTime ||
-      !duration ||
-      !subject ||
-      !receiverId ||
-      !meetingType
-    ) {
+    if (!startTime || !endTime || !subject || !studentId || !meetingType) {
       return errorResponse(res, 400, "All required fields must be provided");
     }
 
     const scheduleData = {
       startTime: new Date(startTime),
       endTime: new Date(endTime),
-      duration,
       subject,
       meetingType,
       notes,
-      location: meetingType === "offline" ? location : undefined,
+      tutor: req.user.id,
+      student: studentId,
+      status: "upcoming",
+      ...(meetingType === "offline" ? { location } : { meetingLink }),
     };
-
-    if (req.user.role === "Student") {
-      scheduleData.tutor = receiverId;
-      scheduleData.student = req.user.id;
-      scheduleData.status = "pending";
-    } else if (req.user.role === "Tutor") {
-      scheduleData.tutor = req.user.id;
-      scheduleData.student = receiverId;
-      scheduleData.status = "accepted";
-    } else {
-      return errorResponse(
-        res,
-        403,
-        "Only students and tutors can create schedules"
-      );
-    }
 
     const newSchedule = await Schedule.create(scheduleData);
     await newSchedule.populate([
@@ -64,10 +47,10 @@ export const createSchedule = async (req, res) => {
 
     // Create notification
     const notification = await Notification.create({
-      recipient: receiverId,
+      recipient: studentId,
       type: "session",
-      title: "New Session Request",
-      message: `${req.user.name} has requested a tutoring session for ${subject}`,
+      title: "New Session Scheduled",
+      message: `${req.user.name} has scheduled a tutoring session for ${subject}`,
       relatedTo: {
         model: "Session",
         id: newSchedule._id,
@@ -75,7 +58,7 @@ export const createSchedule = async (req, res) => {
     });
 
     if (req.io) {
-      req.io.to(receiverId).emit("newSchedule", {
+      req.io.to(studentId).emit("newSchedule", {
         schedule: newSchedule,
         notification,
       });
@@ -91,41 +74,12 @@ export const createSchedule = async (req, res) => {
   }
 };
 
-export const viewScheduleRequests = async (req, res) => {
+export const getTutorSchedules = async (req, res) => {
   try {
-    if (req.user.role !== "Tutor") {
-      return errorResponse(res, 403, "Only tutors can view schedule requests");
-    }
-
-    const schedules = await Schedule.find({
-      tutor: req.user.id,
-      status: "pending",
-    })
-      .populate("student", "name email")
-      .sort({ startTime: 1 });
-
-    res.status(200).json({
-      success: true,
-      schedules,
-    });
-  } catch (error) {
-    return errorResponse(res, 500, error.message);
-  }
-};
-
-export const getSchedulesByStatus = async (req, res) => {
-  try {
-    const { status } = req.query;
-    const query = {
-      ...(status && { status }),
-      [req.user.role.toLowerCase()]: req.user.id,
-    };
-
-    const schedules = await Schedule.find(query)
+    const schedules = await Schedule.find({ tutor: req.user.id })
       .populate("tutor", "name email")
       .populate("student", "name email")
-      .sort({ startTime: -1 });
-
+      .sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
       schedules,
@@ -137,14 +91,10 @@ export const getSchedulesByStatus = async (req, res) => {
 
 export const updateScheduleStatus = async (req, res) => {
   try {
-    if (req.user.role !== "Tutor") {
-      return errorResponse(res, 403, "Only tutors can update schedule status");
-    }
-
-    const { status, meetingLink, reason } = req.body;
+    const { status, reason } = req.body;
     const schedule = await Schedule.findOne({
       _id: req.params.id,
-      tutor: req.user.id,
+      [req.user.role.toLowerCase()]: req.user.id,
     });
 
     if (!schedule) {
@@ -154,21 +104,21 @@ export const updateScheduleStatus = async (req, res) => {
     if (status === "cancelled") {
       await schedule.cancelMeeting(reason);
     } else if (status === "completed") {
-      await schedule.completeMeeting();
-    } else {
-      schedule.status = status;
-      if (status === "accepted" && schedule.meetingType === "online") {
-        schedule.meetingLink = meetingLink;
+      if (req.user.role !== "tutor") {
+        return errorResponse(
+          res,
+          403,
+          "Only tutors can mark sessions as completed"
+        );
       }
-      await schedule.save();
+      await schedule.completeMeeting();
     }
 
-    // Create notification
     const notification = await Notification.create({
       recipient: schedule.student,
       type: "session",
       title: `Session ${status}`,
-      message: `Your session has been ${status} by ${req.user.name}`,
+      message: `Your session has been marked as ${status} by ${req.user.name}`,
       relatedTo: {
         model: "Session",
         id: schedule._id,
@@ -176,7 +126,7 @@ export const updateScheduleStatus = async (req, res) => {
     });
 
     if (req.io) {
-      req.io.to(schedule.student.toString()).emit("scheduleUpdated", {
+      req.io.to(schedule.student).emit("scheduleUpdated", {
         schedule,
         notification,
       });
@@ -184,7 +134,7 @@ export const updateScheduleStatus = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Schedule ${status} successfully`,
+      message: `Schedule marked as ${status} successfully`,
       schedule,
     });
   } catch (error) {
@@ -199,10 +149,6 @@ export const provideFeedback = async (req, res) => {
     }
 
     const { rating, comment } = req.body;
-    if (!rating || rating < 1 || rating > 5) {
-      return errorResponse(res, 400, "Valid rating (1-5) is required");
-    }
-
     const schedule = await Schedule.findOne({
       _id: req.params.id,
       student: req.user.id,
@@ -213,13 +159,45 @@ export const provideFeedback = async (req, res) => {
       return errorResponse(res, 404, "Completed schedule not found");
     }
 
-    schedule.feedback = { rating, comment };
-    await schedule.save();
+    await schedule.addFeedback(rating, comment);
+
+    const notification = await Notification.create({
+      recipient: schedule.tutor,
+      type: "feedback",
+      title: "New Session Feedback",
+      message: `${req.user.name} has provided feedback for your session`,
+      relatedTo: {
+        model: "Session",
+        id: schedule._id,
+      },
+    });
+
+    if (req.io) {
+      req.io.to(schedule.tutor.toString()).emit("newFeedback", {
+        schedule,
+        notification,
+      });
+    }
 
     res.status(200).json({
       success: true,
       message: "Feedback provided successfully",
       schedule,
+    });
+  } catch (error) {
+    return errorResponse(res, 500, error.message);
+  }
+};
+
+export const getStudentSchedules = async (req, res) => {
+  try {
+    const schedules = await Schedule.find({ student: req.user.id })
+      .populate("tutor", "name email")
+      .populate("student", "name email")
+      .sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      schedules,
     });
   } catch (error) {
     return errorResponse(res, 500, error.message);

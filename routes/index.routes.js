@@ -7,6 +7,7 @@ import blog from "./blog.route.js";
 import comment from "./comment.route.js";
 import schedule from "./schedule.route.js";
 import notification from "./notification.route.js";
+import analytic from "./analytic.route.js";
 
 const routes = {
   user: user,
@@ -18,6 +19,7 @@ const routes = {
   comment: comment,
   schedule: schedule,
   notification: notification,
+  analytic: analytic,
 };
 
 export default routes;

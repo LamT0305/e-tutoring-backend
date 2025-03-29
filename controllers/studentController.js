@@ -1,3 +1,4 @@
+import Allocation from "../models/allocation.model.js";
 import User from "../models/user.model.js";
 
 const errorResponse = (res, status, message) => {
@@ -8,10 +9,6 @@ export const getAllStudents = async (req, res) => {
   try {
     const students = await User.find({ role: "student", isActive: true })
       .select("-password")
-      .populate({
-        path: "tutors",
-        select: "name email avatar subjects",
-      })
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -115,9 +112,7 @@ export const deleteStudent = async (req, res) => {
       return errorResponse(res, 404, "Student not found");
     }
 
-    // Soft delete
-    student.isActive = false;
-    await student.save();
+    await student.deleteOne();
 
     res.status(200).json({
       success: true,
@@ -177,5 +172,36 @@ export const getStudentTutors = async (req, res) => {
     });
   } catch (error) {
     return errorResponse(res, 500, error.message);
+  }
+};
+
+export const viewTutorAssigned = async (req, res) => {
+  try {
+    const allocations = await Allocation.find({
+      student_id: req.user.id,
+    });
+
+    if (!allocations || allocations.length === 0) {
+      return errorResponse(res, 404, "No allocation found");
+    }
+
+    const tutorPromises = allocations.map((alloc) =>
+      User.findOne({ _id: alloc.tutor_id })
+    );
+
+    const tutors = await Promise.all(tutorPromises);
+
+    const validTutors = tutors.filter((tutor) => tutor !== null);
+
+    if (!validTutors) {
+      return errorResponse(res, 404, "Tutor not found");
+    }
+
+    return res.status(200).json({
+      success: true,
+      tutors: validTutors,
+    });
+  } catch (e) {
+    return errorResponse(res, 500, e.message);
   }
 };

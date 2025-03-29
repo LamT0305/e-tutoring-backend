@@ -102,16 +102,16 @@ export const allocateTutors = async (req, res) => {
     }
 
     const existingAllocations = await Allocation.find({
-      tutor: tutorId,
-      student: { $in: studentIds },
+      tutor_id: tutorId,
+      student_id: { $in: studentIds },
     });
 
-    const allocatedStudentIds = existingAllocations.map((allocation) =>
-      allocation.student.toString()
+    const allocatedStudentIds = existingAllocations.map(
+      (allocation) => allocation.student_id
     );
 
     const newStudentIds = studentIds.filter(
-      (id) => !allocatedStudentIds.includes(id.toString())
+      (id) => !allocatedStudentIds.includes(id)
     );
 
     if (newStudentIds.length === 0) {
@@ -124,15 +124,19 @@ export const allocateTutors = async (req, res) => {
 
     const allocations = await Allocation.insertMany(
       newStudentIds.map((studentId) => ({
-        tutor: tutorId,
-        student: studentId,
+        tutor_id: tutorId,
+        student_id: studentId,
       }))
     );
-
+    const populatedAllocations = await Allocation.find({
+      _id: { $in: allocations.map((a) => a._id) },
+    })
+      .populate("tutor_id", "name email")
+      .populate("student_id", "name email");
     res.status(200).json({
       success: true,
       message: "Students allocated successfully",
-      allocations,
+      allocations: populatedAllocations,
     });
   } catch (error) {
     return errorResponse(res, 500, error.message);
@@ -150,8 +154,8 @@ export const getAllocations = async (req, res) => {
     }
 
     const allocations = await Allocation.find()
-      .populate("tutor", "name email")
-      .populate("student", "name email")
+      .populate("tutor_id", "name email")
+      .populate("student_id", "name email")
       .sort({ created_at: -1 });
 
     res.status(200).json({
@@ -173,9 +177,7 @@ export const deleteAllocation = async (req, res) => {
       );
     }
 
-    const allocation = await Allocation.findById(req.params.id)
-      .populate("tutor", "name")
-      .populate("student", "name");
+    const allocation = await Allocation.findById(req.params.id);
 
     if (!allocation) {
       return errorResponse(res, 404, "Allocation not found");
