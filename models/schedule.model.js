@@ -36,7 +36,10 @@ const ScheduleSchema = new mongoose.Schema(
       index: true,
       validate: {
         validator: function (value) {
-          return value > new Date();
+          if (this.isNew) {
+            return value > new Date();
+          }
+          return true;
         },
         message: "Start time must be in the future",
       },
@@ -141,12 +144,18 @@ ScheduleSchema.methods.cancelMeeting = async function (reason) {
 };
 
 ScheduleSchema.methods.completeMeeting = async function () {
-  if (this.startTime > new Date()) {
-    throw new Error("Cannot complete a future meeting");
-  }
   if (this.status === "cancelled") {
     throw new Error("Cannot complete a cancelled meeting");
   }
+
+  const currentTime = new Date();
+  const startTime = new Date(this.startTime);
+  const endTime = new Date(this.endTime);
+
+  if (currentTime < startTime) {
+    throw new Error("Cannot complete a meeting before its start time");
+  }
+
   this.status = "completed";
   return await this.save();
 };

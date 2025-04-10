@@ -95,15 +95,15 @@ export const updateScheduleStatus = async (req, res) => {
     const schedule = await Schedule.findOne({
       _id: req.params.id,
       [req.user.role.toLowerCase()]: req.user.id,
-    });
+    })
+      .populate("tutor", "name email")
+      .populate("student", "name email");
 
     if (!schedule) {
       return errorResponse(res, 404, "Schedule not found");
     }
 
-    if (status === "cancelled") {
-      await schedule.cancelMeeting(reason);
-    } else if (status === "completed") {
+    if (status === "completed") {
       if (req.user.role !== "tutor") {
         return errorResponse(
           res,
@@ -111,7 +111,13 @@ export const updateScheduleStatus = async (req, res) => {
           "Only tutors can mark sessions as completed"
         );
       }
-      await schedule.completeMeeting();
+      try {
+        await schedule.completeMeeting();
+      } catch (error) {
+        return errorResponse(res, 400, error.message);
+      }
+    } else if (status === "cancelled") {
+      await schedule.cancelMeeting(reason);
     }
 
     const notification = await Notification.create({
