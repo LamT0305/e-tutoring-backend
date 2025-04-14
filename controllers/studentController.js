@@ -1,5 +1,9 @@
 import Allocation from "../models/allocation.model.js";
 import User from "../models/user.model.js";
+import Blog from "../models/blog.model.js";
+import Comment from "../models/comment.model.js";
+import Schedule from "../models/schedule.model.js";
+import Message from "../models/message.model.js";
 
 const errorResponse = (res, status, message) => {
   return res.status(status).json({ success: false, message });
@@ -111,6 +115,40 @@ export const deleteStudent = async (req, res) => {
     if (!student) {
       return errorResponse(res, 404, "Student not found");
     }
+
+
+    await Allocation.deleteMany({
+      student_id: student._id
+    });
+
+
+
+    await Blog.deleteMany({
+      author_id: student._id
+    });
+
+
+     await Comment.deleteMany({
+      author_id: student._id
+    });
+
+
+
+     await Schedule.deleteMany({
+      student: student._id
+    });
+
+
+    await Message.deleteMany({
+      $or: [
+        { sender: student._id},
+        { receiver: student._id },
+      ],
+    });
+
+
+
+
 
     await student.deleteOne();
 
