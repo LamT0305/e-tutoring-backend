@@ -1,6 +1,6 @@
 import Schedule from "../models/schedule.model.js";
 import Notification from "../models/notification.model.js";
-import { sendNotification } from "../socket.js";
+import { sendEmail } from "../services/emailService.js";
 
 const errorResponse = (res, status, message) => {
   return res.status(status).json({ success: false, message });
@@ -34,15 +34,18 @@ export const createSchedule = async (req, res) => {
     });
 
     const isScheduleOverlapping = schedules.some((schedule) => {
-      const scheduleStartTime = new Date(schedule.startTime);
-      const scheduleEndTime = new Date(schedule.endTime);
-      const newStartTime = new Date(startTime);
-      const newEndTime = new Date(endTime);
-      return (
-        (newStartTime >= scheduleStartTime && newStartTime < scheduleEndTime) ||
-        (newEndTime > scheduleStartTime && newEndTime <= scheduleEndTime) ||
-        (newStartTime <= scheduleStartTime && newEndTime >= scheduleEndTime)
-      );
+      if (schedule.status === "upcoming") {
+        const scheduleStartTime = new Date(schedule.startTime);
+        const scheduleEndTime = new Date(schedule.endTime);
+        const newStartTime = new Date(startTime);
+        const newEndTime = new Date(endTime);
+        return (
+          (newStartTime >= scheduleStartTime &&
+            newStartTime < scheduleEndTime) ||
+          (newEndTime > scheduleStartTime && newEndTime <= scheduleEndTime) ||
+          (newStartTime <= scheduleStartTime && newEndTime >= scheduleEndTime)
+        );
+      }
     });
 
     if (isScheduleOverlapping) {
@@ -82,6 +85,37 @@ export const createSchedule = async (req, res) => {
         id: newSchedule._id,
       },
     });
+
+    try {
+      // Send email notification
+      const emailContent = `
+    <h2>New Tutoring Session Scheduled</h2>
+    <p>Tutor: ${req.user.name}</p>
+    <p>Subject: ${subject}</p>
+    <p>Date: ${new Date(startTime).toLocaleString()}</p>
+    <p>Duration: ${Math.floor(
+      (new Date(endTime) - new Date(startTime)) / 60000
+    )} minutes</p>
+    <p>Meeting Type: ${meetingType}</p>
+    ${
+      meetingType === "offline"
+        ? `<p>Location: ${location}</p>`
+        : `<p>Meeting Link: ${meetingLink}</p>`
+    }
+  `;
+
+      await sendEmail(
+        newSchedule.student.email,
+        "New Tutoring Session Scheduled",
+        emailContent
+      ).catch((e) => console.error("Email notification failed:", e));
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to send notification",
+        error: error.message,
+      });
+    }
 
     if (req.io) {
       req.io.to(studentId).emit("newSchedule", {
