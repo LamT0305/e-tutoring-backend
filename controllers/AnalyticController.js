@@ -57,23 +57,26 @@ const generateAnalytics = async (studentId) => {
     progress: Math.round((data.completed / data.sessions_count) * 100),
   }));
 
-  // Generate sessions over time data (last 15 days)
   const sessions_over_time = [];
   const today = new Date();
+  today.setHours(23, 59, 59, 999); // Set to end of day
   const fifteenDaysAgo = new Date(today);
-  fifteenDaysAgo.setDate(today.getDate() - 14); // Adjust to include today
+  fifteenDaysAgo.setDate(today.getDate() - 14);
+  fifteenDaysAgo.setHours(0, 0, 0, 0); // Set to start of day
 
   for (
     let date = new Date(fifteenDaysAgo);
     date <= today;
     date.setDate(date.getDate() + 1)
   ) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
     const count = schedules.filter((schedule) => {
       const scheduleDate = new Date(schedule.startTime);
-      return (
-        scheduleDate >= fifteenDaysAgo &&
-        scheduleDate.toDateString() === date.toDateString()
-      );
+      return scheduleDate >= startOfDay && scheduleDate <= endOfDay;
     }).length;
 
     sessions_over_time.push({

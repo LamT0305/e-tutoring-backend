@@ -27,6 +27,32 @@ export const createSchedule = async (req, res) => {
       return errorResponse(res, 400, "All required fields must be provided");
     }
 
+    //validate schedule
+
+    const schedules = await Schedule.find({
+      tutor: req.user.id,
+    });
+
+    const isScheduleOverlapping = schedules.some((schedule) => {
+      const scheduleStartTime = new Date(schedule.startTime);
+      const scheduleEndTime = new Date(schedule.endTime);
+      const newStartTime = new Date(startTime);
+      const newEndTime = new Date(endTime);
+      return (
+        (newStartTime >= scheduleStartTime && newStartTime < scheduleEndTime) ||
+        (newEndTime > scheduleStartTime && newEndTime <= scheduleEndTime) ||
+        (newStartTime <= scheduleStartTime && newEndTime >= scheduleEndTime)
+      );
+    });
+
+    if (isScheduleOverlapping) {
+      return errorResponse(
+        res,
+        400,
+        "The schedule overlaps with an existing schedule"
+      );
+    }
+
     const scheduleData = {
       startTime: new Date(startTime),
       endTime: new Date(endTime),
