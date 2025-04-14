@@ -9,7 +9,7 @@ export const getAllStudents = async (req, res) => {
   try {
     const students = await User.find({ role: "student", isActive: true })
       .select("-password")
-      .sort({ createdAt: -1 });
+      .sort({ created_at: -1 });
 
     res.status(200).json({
       success: true,
